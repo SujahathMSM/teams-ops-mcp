@@ -11,6 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.config import settings
+from app.tools.github import register_github_tools
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -27,6 +28,9 @@ def ping(message: str = "pong") -> str:
     """Health-check tool that echoes back a message with the server UTC timestamp."""
     now = datetime.now(UTC).isoformat()
     return f"{settings.app_name}: {message} (utc={now})"
+
+
+register_github_tools(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"])
@@ -61,4 +65,4 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=(settings.app_env == "development"),
-    ) 
+    )
