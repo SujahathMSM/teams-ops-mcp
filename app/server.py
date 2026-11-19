@@ -13,6 +13,7 @@ from starlette.types import ASGIApp
 from app.auth import BearerAuthMiddleware
 from app.config import settings
 from app.db import configure_windows_event_loop
+from app.logging_db import audited_tool
 from app.tools.github import register_github_tools
 from app.tools.incidents import register_incident_tools
 
@@ -29,7 +30,8 @@ mcp = MCPServer(settings.app_name)
 
 
 @mcp.tool()
-def ping(message: str = "pong") -> str:
+@audited_tool
+async def ping(message: str = "pong") -> str:
     """Health-check tool that echoes back a message with the server UTC timestamp."""
     now = datetime.now(UTC).isoformat()
     return f"{settings.app_name}: {message} (utc={now})"

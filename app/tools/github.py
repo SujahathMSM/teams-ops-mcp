@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from app.auth import require_role
 from app.config import settings
+from app.logging_db import audited_tool
 
 _REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -223,6 +224,7 @@ def register_github_tools(mcp: MCPServer) -> None:
     """Register GitHub tools on the MCPServer instance."""
 
     @mcp.tool()
+    @audited_tool
     async def github_open_prs(repo: str) -> dict[str, Any]:
         """List open pull requests for a GitHub repository ('owner/name').
 
@@ -231,6 +233,7 @@ def register_github_tools(mcp: MCPServer) -> None:
         return await fetch_open_prs(repo)
 
     @mcp.tool()
+    @audited_tool
     async def github_issue_summary(repo: str, label: str | None = None) -> dict[str, Any]:
         """Count repository issues grouped by state (open/closed) and label.
 
@@ -241,6 +244,7 @@ def register_github_tools(mcp: MCPServer) -> None:
         return await fetch_issue_summary(repo, label=label)
 
     @mcp.tool()
+    @audited_tool
     async def create_issue(repo: str, title: str, body: str = "") -> dict[str, Any]:
         """Create a new GitHub issue in a repository (requires 'editor' or 'admin' role).
 
