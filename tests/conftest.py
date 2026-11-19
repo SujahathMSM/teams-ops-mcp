@@ -56,9 +56,7 @@ def _bootstrap_test_database(test_db_url: str) -> None:
                 (target_db,),
             ).fetchone()
             if row is None:
-                conn.execute(
-                    sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_db))
-                )
+                conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_db)))
     except psycopg.OperationalError:
         # Fallback if 'postgres' database is inaccessible; try base settings.database_url
         with psycopg.connect(settings.database_url, autocommit=True) as conn:
@@ -67,9 +65,7 @@ def _bootstrap_test_database(test_db_url: str) -> None:
                 (target_db,),
             ).fetchone()
             if row is None:
-                conn.execute(
-                    sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_db))
-                )
+                conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_db)))
 
     schema_sql = (PROJECT_ROOT / "sql" / "schema.sql").read_text(encoding="utf-8")
     seed_sql = (PROJECT_ROOT / "sql" / "seed.sql").read_text(encoding="utf-8")

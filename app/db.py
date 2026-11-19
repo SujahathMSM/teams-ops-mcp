@@ -17,8 +17,8 @@ def configure_windows_event_loop() -> None:
         try:
             import uvicorn.loops.asyncio as uvicorn_asyncio
 
-            uvicorn_asyncio.asyncio_loop_factory = (
-                lambda use_subprocess=False: asyncio.SelectorEventLoop
+            uvicorn_asyncio.asyncio_loop_factory = lambda use_subprocess=False: (
+                asyncio.SelectorEventLoop
             )
         except ImportError:
             pass
