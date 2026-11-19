@@ -89,9 +89,7 @@ async def fetch_open_prs(repo: str) -> dict[str, Any]:
         age_days = round((now - created_at).total_seconds() / 86400, 1)
 
         reviewers = [r["login"] for r in pr.get("requested_reviewers", []) if "login" in r]
-        team_reviewers = [
-            f"team:{t['slug']}" for t in pr.get("requested_teams", []) if "slug" in t
-        ]
+        team_reviewers = [f"team:{t['slug']}" for t in pr.get("requested_teams", []) if "slug" in t]
 
         prs.append(
             {
@@ -171,9 +169,7 @@ async def fetch_issue_summary(repo: str, label: str | None = None) -> dict[str, 
                 by_label[lbl_name][state] += 1
             by_label[lbl_name]["total"] += 1
 
-    sorted_by_label = dict(
-        sorted(by_label.items(), key=lambda kv: kv[1]["total"], reverse=True)
-    )
+    sorted_by_label = dict(sorted(by_label.items(), key=lambda kv: kv[1]["total"], reverse=True))
 
     return {
         "repo": repo_name,
