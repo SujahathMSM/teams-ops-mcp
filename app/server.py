@@ -6,10 +6,11 @@ from datetime import UTC, datetime
 import uvicorn
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp
 
+from app.auth import BearerAuthMiddleware
 from app.config import settings
 from app.db import configure_windows_event_loop
 from app.tools.github import register_github_tools
@@ -50,15 +51,16 @@ async def health(_request: Request) -> JSONResponse:
     )
 
 
-def create_app() -> Starlette:
-    """Create the ASGI app serving MCP Streamable HTTP at /mcp and custom routes."""
-    return mcp.streamable_http_app(
+def create_app() -> ASGIApp:
+    """Create the ASGI app serving MCP Streamable HTTP at /mcp wrapped with Bearer auth."""
+    mcp_starlette_app = mcp.streamable_http_app(
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=settings.allowed_hosts,
             allowed_origins=settings.allowed_origins,
         )
     )
+    return BearerAuthMiddleware(mcp_starlette_app, public_paths={"/health"})
 
 
 app = create_app()

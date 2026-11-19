@@ -8,6 +8,7 @@ import httpx
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from app.auth import require_role
 from app.config import settings
 
 _REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -183,6 +184,41 @@ async def fetch_issue_summary(repo: str, label: str | None = None) -> dict[str, 
     }
 
 
+async def create_github_issue(repo: str, title: str, body: str = "") -> dict[str, Any]:
+    """Create a new GitHub issue in the specified repository."""
+    repo_name = _validate_repo(repo)
+    cleaned_title = title.strip()
+    if not cleaned_title:
+        raise GitHubAPIError("Issue title cannot be empty.")
+
+    if not settings.github_token:
+        raise GitHubAPIError("GITHUB_TOKEN must be configured in .env to create issues.")
+
+    url = f"{settings.github_api_base_url.rstrip('/')}/repos/{repo_name}/issues"
+    payload = {
+        "title": cleaned_title,
+        "body": body,
+    }
+
+    async with httpx.AsyncClient(timeout=settings.github_timeout_seconds) as client:
+        try:
+            response = await client.post(url, headers=_build_headers(), json=payload)
+        except httpx.RequestError as exc:
+            raise GitHubAPIError(f"Network error contacting GitHub API: {exc}") from exc
+
+    _raise_for_github_status(response, repo_name)
+    data = response.json()
+
+    return {
+        "repo": repo_name,
+        "number": data["number"],
+        "title": data["title"],
+        "state": data.get("state", "open"),
+        "author": (data.get("user") or {}).get("login") or "unknown",
+        "url": data["html_url"],
+    }
+
+
 def register_github_tools(mcp: MCPServer) -> None:
     """Register GitHub tools on the MCPServer instance."""
 
@@ -203,3 +239,15 @@ def register_github_tools(mcp: MCPServer) -> None:
             label: Optional GitHub label name to filter by.
         """
         return await fetch_issue_summary(repo, label=label)
+
+    @mcp.tool()
+    async def create_issue(repo: str, title: str, body: str = "") -> dict[str, Any]:
+        """Create a new GitHub issue in a repository (requires 'editor' or 'admin' role).
+
+        Args:
+            repo: Repository in 'owner/name' format.
+            title: Issue title.
+            body: Optional markdown description for the issue.
+        """
+        require_role("editor", "admin", tool_name="create_issue")
+        return await create_github_issue(repo=repo, title=title, body=body)
