@@ -16,6 +16,7 @@ from app.db import configure_windows_event_loop
 from app.logging_db import audited_tool
 from app.tools.github import register_github_tools
 from app.tools.incidents import register_incident_tools
+from app.usage import usage_endpoint
 
 configure_windows_event_loop()
 
@@ -51,6 +52,12 @@ async def health(_request: Request) -> JSONResponse:
             "env": settings.app_env,
         }
     )
+
+
+@mcp.custom_route("/usage", methods=["GET"])
+async def usage(request: Request) -> JSONResponse:
+    """Admin-only analytics endpoint summarizing tool usage over ?days=N."""
+    return await usage_endpoint(request)
 
 
 def create_app() -> ASGIApp:
