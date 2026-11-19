@@ -11,7 +11,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.config import settings
+from app.db import configure_windows_event_loop
 from app.tools.github import register_github_tools
+from app.tools.incidents import register_incident_tools
+
+configure_windows_event_loop()
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -31,6 +35,7 @@ def ping(message: str = "pong") -> str:
 
 
 register_github_tools(mcp)
+register_incident_tools(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"])
