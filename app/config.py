@@ -25,6 +25,8 @@ class Settings(BaseSettings):
         "http://[::1]:*",
     ]
 
+    database_url: str = "postgresql://teamops:teamops_dev_password@127.0.0.1:5432/teamops"
+
     github_token: str = ""
     github_api_base_url: str = "https://api.github.com"
     github_timeout_seconds: float = 15.0
