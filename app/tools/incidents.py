@@ -7,6 +7,7 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from app.db import get_pool
+from app.logging_db import audited_tool
 
 
 class IncidentSearchError(ToolError):
@@ -115,12 +116,13 @@ def register_incident_tools(mcp: MCPServer) -> None:
     """Register incident search tools on the MCPServer instance."""
 
     @mcp.tool()
+    @audited_tool
     async def incidents_search(query: str, limit: int = 5) -> dict[str, Any]:
         """Full-text search over past engineering incidents and runbooks in Postgres.
 
         Args:
-            query: Keywords, error code, service name, or incident key (e.g. 'redis latency', 
-            '502').
+            query: Keywords, error code, service name, or incident key (e.g. 'redis latency',
+              '502').
             limit: Maximum number of matching incidents to return (1-20, default 5).
         """
         return await search_incidents(query=query, limit=limit)
