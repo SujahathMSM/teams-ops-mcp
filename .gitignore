@@ -25,3 +25,8 @@ htmlcov/
 Thumbs.db
 .vscode/
 .idea/
+# AI client configs (contain real tokens)
+.gemini/
+.agents/
+.claude/
+.mcp.json
