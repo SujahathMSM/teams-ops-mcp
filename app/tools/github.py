@@ -69,10 +69,12 @@ async def fetch_open_prs(repo: str) -> dict[str, Any]:
             response = await client.get(
                 url,
                 headers=_build_headers(),
+                # Why sort by "created": the tool reports age_days from created_at, so the list
+                # must be ordered by the same field or "most recent" answers come out wrong.
                 params={
                     "state": "open",
                     "per_page": 50,
-                    "sort": "updated",
+                    "sort": "created",
                     "direction": "desc",
                 },
             )
@@ -97,6 +99,8 @@ async def fetch_open_prs(repo: str) -> dict[str, Any]:
                 "title": pr["title"],
                 "author": (pr.get("user") or {}).get("login") or "unknown",
                 "age_days": age_days,
+                "created_at": pr["created_at"],
+                "updated_at": pr.get("updated_at"),
                 "requested_reviewers": reviewers + team_reviewers,
                 "url": pr["html_url"],
             }
@@ -105,6 +109,7 @@ async def fetch_open_prs(repo: str) -> dict[str, Any]:
     return {
         "repo": repo_name,
         "open_pr_count": len(prs),
+        "sorted_by": "created_at desc (newest first)",
         "prs": prs,
     }
 
@@ -222,9 +227,10 @@ def register_github_tools(mcp: MCPServer) -> None:
     @mcp.tool()
     @audited_tool
     async def github_open_prs(repo: str) -> dict[str, Any]:
-        """List open pull requests for a GitHub repository ('owner/name').
+        """List open pull requests for a GitHub repository ('owner/name'), newest first.
 
-        Returns title, author, age in days, and requested reviewers for each open PR.
+        Returns title, author, age in days, created/updated timestamps, and requested
+        reviewers for each open PR (up to 50).
         """
         return await fetch_open_prs(repo)
 

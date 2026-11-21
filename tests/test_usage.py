@@ -82,6 +82,7 @@ async def test_usage_endpoint_aggregates_window_accurately(
     assert data_7["avg_latency_ms"] == 190.0
     assert data_7["total_est_tokens"] == 300
     assert len(data_7["by_user"]) == 2
+    assert all("last_used_at" in row for row in data_7["by_user"])
     assert len(data_7["by_tool"]) == 3
 
     # 30-day window should include all 5 calls

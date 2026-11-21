@@ -57,6 +57,15 @@ LIMIT %(limit)s;
 """
 
 
+def escape_like(value: str) -> str:
+    """Escape LIKE/ILIKE wildcards so user input is matched literally.
+
+    Why: without this, a query like '100%' or 'p_ol' turns '%'/'_' into wildcards and
+    matches far more rows than the user asked for. Postgres' default LIKE escape char is '\\'.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 async def search_incidents(query: str, limit: int = 5) -> dict[str, Any]:
     """Run full-text search across the incidents table in PostgreSQL."""
     cleaned_query = query.strip()
@@ -68,7 +77,7 @@ async def search_incidents(query: str, limit: int = 5) -> dict[str, Any]:
 
     params = {
         "query": cleaned_query,
-        "like_pattern": f"%{cleaned_query}%",
+        "like_pattern": f"%{escape_like(cleaned_query)}%",
         "limit": limit,
     }
 

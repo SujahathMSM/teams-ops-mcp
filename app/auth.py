@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -11,7 +12,13 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.db import get_pool
 
+logger = logging.getLogger(__name__)
+
 VALID_ROLES: tuple[str, ...] = ("viewer", "editor", "admin")
+
+# Why throttle: an MCP session sends many requests per minute; writing last_used_at on
+# every one would turn each read-only request into a DB write for no extra insight.
+LAST_USED_THROTTLE_SECONDS = 60
 
 
 class PermissionDeniedError(ToolError):
@@ -84,6 +91,32 @@ async def get_user_by_token(raw_token: str) -> AuthenticatedUser | None:
         username=row["username"],
         role=row["role"],
     )
+
+
+async def touch_last_used(user_id: int) -> None:
+    """Record token usage time, at most once per LAST_USED_THROTTLE_SECONDS per user.
+
+    Failures are logged and swallowed: usage tracking must never block authentication
+    (e.g. if migration 001 has not been applied to an older database yet).
+    """
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            await conn.execute(
+                """
+                UPDATE users
+                SET last_used_at = NOW()
+                WHERE id = %(user_id)s
+                  AND (
+                    last_used_at IS NULL
+                    OR last_used_at < NOW() - make_interval(secs => %(throttle)s)
+                  );
+                """,
+                {"user_id": user_id, "throttle": LAST_USED_THROTTLE_SECONDS},
+            )
+            await conn.commit()
+    except Exception:
+        logger.warning("Could not update last_used_at for user_id=%s", user_id, exc_info=True)
 
 
 def require_role(*allowed_roles: str, tool_name: str) -> AuthenticatedUser:
@@ -162,6 +195,8 @@ class BearerAuthMiddleware:
             )
             await response(scope, receive, send)
             return
+
+        await touch_last_used(user.id)
 
         ctx_token = set_current_user(user)
         try:

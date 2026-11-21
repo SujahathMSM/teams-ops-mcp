@@ -19,7 +19,7 @@ async def test_fetch_open_prs_parses_prs_and_reviewers(
 ) -> None:
     monkeypatch.setattr(settings, "github_token", "fake_gh_token")
 
-    respx.get("https://api.github.com/repos/octocat/demo/pulls").mock(
+    route = respx.get("https://api.github.com/repos/octocat/demo/pulls").mock(
         return_value=httpx.Response(
             200,
             json=[
@@ -28,6 +28,7 @@ async def test_fetch_open_prs_parses_prs_and_reviewers(
                     "title": "Add circuit breaker to GitHub client",
                     "user": {"login": "alice"},
                     "created_at": "2026-11-10T00:00:00Z",
+                    "updated_at": "2026-11-12T08:30:00Z",
                     "requested_reviewers": [{"login": "bob"}],
                     "requested_teams": [{"slug": "platform"}],
                     "html_url": "https://github.com/octocat/demo/pull/42",
@@ -44,6 +45,14 @@ async def test_fetch_open_prs_parses_prs_and_reviewers(
     assert pr["author"] == "alice"
     assert pr["age_days"] >= 0
     assert pr["requested_reviewers"] == ["bob", "team:platform"]
+    assert pr["created_at"] == "2026-11-10T00:00:00Z"
+    assert pr["updated_at"] == "2026-11-12T08:30:00Z"
+    assert result["sorted_by"].startswith("created_at desc")
+
+    # Sort order must match the field age_days is computed from.
+    sent_params = route.calls.last.request.url.params
+    assert sent_params["sort"] == "created"
+    assert sent_params["direction"] == "desc"
 
 
 async def test_fetch_open_prs_validates_repo_format() -> None:
