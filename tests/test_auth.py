@@ -15,7 +15,18 @@ from app.auth import (
     reset_current_user,
     set_current_user,
 )
+from app.db import get_pool
 from tests.conftest import TestUser
+
+
+async def _last_used_at(user_id: int):  # noqa: ANN202 - test helper
+    pool = await get_pool()
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT last_used_at FROM users WHERE id = %s;", (user_id,))
+            row = await cur.fetchone()
+    assert row is not None
+    return row["last_used_at"]
 
 
 def test_token_hashing_is_deterministic_and_not_plaintext() -> None:
@@ -96,3 +107,30 @@ def test_require_role_enforces_viewer_vs_editor_vs_admin() -> None:
         assert user.username == "bob"
     finally:
         reset_current_user(editor_ctx)
+
+
+async def test_authenticated_request_records_last_used_at_with_throttle(
+    asgi_client: AsyncClient,
+    viewer_user: TestUser,
+) -> None:
+    assert await _last_used_at(viewer_user.id) is None
+
+    # /usage goes through the same Bearer middleware as /mcp (a viewer gets 403 after
+    # authenticating), without needing the MCP session manager's lifespan in tests.
+    headers = {"Authorization": f"Bearer {viewer_user.raw_token}"}
+    assert (await asgi_client.get("/usage", headers=headers)).status_code == 403
+    first_seen = await _last_used_at(viewer_user.id)
+    assert first_seen is not None
+
+    # A second request inside the throttle window must not rewrite the timestamp.
+    await asgi_client.get("/usage", headers=headers)
+    assert await _last_used_at(viewer_user.id) == first_seen
+
+
+async def test_rejected_token_does_not_touch_last_used_at(
+    asgi_client: AsyncClient,
+    viewer_user: TestUser,
+) -> None:
+    resp = await asgi_client.get("/usage", headers={"Authorization": "Bearer tomcp_wrong"})
+    assert resp.status_code == 401
+    assert await _last_used_at(viewer_user.id) is None

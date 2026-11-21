@@ -6,8 +6,13 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(16) NOT NULL CHECK (role IN ('viewer', 'editor', 'admin')),
     token_hash CHAR(64) NOT NULL UNIQUE,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ
 );
+
+-- Idempotent upgrade for databases created before last_used_at existed
+-- (see sql/migrations/001_users_last_used_at.sql for existing Docker volumes).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_users_token_hash ON users (token_hash);
 
@@ -49,4 +54,4 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 
 CREATE INDEX IF NOT EXISTS idx_tool_calls_created_at ON tool_calls (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_user_id ON tool_calls (user_id);
-CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_name ON tool_calls (tool_name);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_name ON tool_calls (tool_name);

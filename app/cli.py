@@ -76,13 +76,48 @@ async def _create_user(username: str, role: str, rotate: bool = False) -> int:
     return 0
 
 
+async def _deactivate_user(username: str) -> int:
+    """Revoke a user's access immediately without deleting their audit history."""
+    cleaned_username = username.strip()
+    if not cleaned_username:
+        print("Error: username cannot be empty.", file=sys.stderr)
+        return 1
+
+    pool = await get_pool()
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                UPDATE users
+                SET active = FALSE
+                WHERE username = %(username)s
+                RETURNING id, username, role;
+                """,
+                {"username": cleaned_username},
+            )
+            row = await cur.fetchone()
+        await conn.commit()
+
+    if row is None:
+        print(f"Error: user '{cleaned_username}' not found.", file=sys.stderr)
+        return 1
+
+    print(
+        f"User deactivated: id={row['id']} username={row['username']} role={row['role']}. "
+        "Their token is rejected from now on; tool_calls history is kept. "
+        "Run create-user ... --rotate to re-enable with a new token."
+    )
+    return 0
+
+
 async def _list_users() -> int:
     pool = await get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, username, role, active, left(token_hash, 12) AS hash_prefix, created_at
+                SELECT id, username, role, active, left(token_hash, 12) AS hash_prefix,
+                       created_at, last_used_at
                 FROM users
                 ORDER BY id ASC;
                 """
@@ -93,12 +128,18 @@ async def _list_users() -> int:
         print("No users found.")
         return 0
 
-    print(f"{'ID':<4} {'USERNAME':<18} {'ROLE':<10} {'ACTIVE':<8} {'HASH_PREFIX':<14} CREATED_AT")
-    print("-" * 78)
+    print(
+        f"{'ID':<4} {'USERNAME':<18} {'ROLE':<10} {'ACTIVE':<8} {'HASH_PREFIX':<14} "
+        f"{'CREATED_AT':<26} LAST_USED_AT"
+    )
+    print("-" * 112)
     for r in rows:
+        last_used_at = r["last_used_at"]
+        last_used = last_used_at.isoformat(timespec="seconds") if last_used_at else "never"
         print(
             f"{r['id']:<4} {r['username']:<18} {r['role']:<10} "
-            f"{str(r['active']):<8} {r['hash_prefix']:<14} {r['created_at'].isoformat()}"
+            f"{str(r['active']):<8} {r['hash_prefix']:<14} "
+            f"{r['created_at'].isoformat(timespec='seconds'):<26} {last_used}"
         )
     return 0
 
@@ -107,6 +148,8 @@ async def _run_cli(args: argparse.Namespace) -> int:
     try:
         if args.command == "create-user":
             return await _create_user(args.username, args.role, rotate=args.rotate)
+        if args.command == "deactivate-user":
+            return await _deactivate_user(args.username)
         if args.command == "list-users":
             return await _list_users()
         return 1
@@ -137,6 +180,12 @@ def main() -> None:
         action="store_true",
         help="Rotate token and update role if the username already exists",
     )
+
+    deactivate_parser = subparsers.add_parser(
+        "deactivate-user",
+        help="Revoke a user's token immediately (keeps their audit history)",
+    )
+    deactivate_parser.add_argument("username", help="Username to deactivate")
 
     subparsers.add_parser("list-users", help="List all users (without raw tokens)")
 

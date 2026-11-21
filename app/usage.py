@@ -24,6 +24,7 @@ _BY_USER_SQL = """
 SELECT
     COALESCE(u.username, 'anonymous') AS username,
     COALESCE(u.role, 'unknown') AS role,
+    u.last_used_at,
     COUNT(*)::int AS total_calls,
     COUNT(*) FILTER (WHERE tc.status = 'ok')::int AS ok_calls,
     COUNT(*) FILTER (WHERE tc.status = 'error')::int AS error_calls,
@@ -33,7 +34,7 @@ SELECT
 FROM tool_calls tc
 LEFT JOIN users u ON u.id = tc.user_id
 WHERE tc.created_at >= NOW() - make_interval(days => %(days)s)
-GROUP BY u.id, u.username, u.role
+GROUP BY u.id, u.username, u.role, u.last_used_at
 ORDER BY total_calls DESC, username ASC;
 """
 
@@ -53,6 +54,12 @@ ORDER BY total_calls DESC, tc.tool_name ASC;
 """
 
 
+def _serialize_user_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Make a by_user row JSON-safe (last_used_at is a datetime or None)."""
+    last_used = row.get("last_used_at")
+    return {**row, "last_used_at": last_used.isoformat() if last_used else None}
+
+
 async def fetch_usage_stats(days: int = 7) -> dict[str, Any]:
     """Query Postgres for aggregated tool usage metrics over the last N days."""
     pool = await get_pool()
@@ -64,7 +71,7 @@ async def fetch_usage_stats(days: int = 7) -> dict[str, Any]:
             summary = await cur.fetchone() or {}
 
             await cur.execute(_BY_USER_SQL, params)
-            by_user = list(await cur.fetchall())
+            by_user = [_serialize_user_row(row) for row in await cur.fetchall()]
 
             await cur.execute(_BY_TOOL_SQL, params)
             by_tool = list(await cur.fetchall())
